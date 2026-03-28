@@ -1,0 +1,51 @@
+package com.github.goposta.posta;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Request body for sending a single email.
+ */
+public class SendEmailRequest {
+
+    private String from;
+    private List<String> to;
+    private String subject;
+    private String html;
+    private String text;
+    private List<Attachment> attachments;
+    private Map<String, String> headers;
+
+    @JsonProperty("list_unsubscribe_url")
+    private String listUnsubscribeUrl;
+
+    @JsonProperty("list_unsubscribe_post")
+    private Boolean listUnsubscribePost;
+
+    @JsonProperty("send_at")
+    private String sendAt;
+
+    public SendEmailRequest from(String from) { this.from = from; return this; }
+    public SendEmailRequest to(List<String> to) { this.to = to; return this; }
+    public SendEmailRequest subject(String subject) { this.subject = subject; return this; }
+    public SendEmailRequest html(String html) { this.html = html; return this; }
+    public SendEmailRequest text(String text) { this.text = text; return this; }
+    public SendEmailRequest attachments(List<Attachment> attachments) { this.attachments = attachments; return this; }
+    public SendEmailRequest headers(Map<String, String> headers) { this.headers = headers; return this; }
+    public SendEmailRequest listUnsubscribeUrl(String url) { this.listUnsubscribeUrl = url; return this; }
+    public SendEmailRequest listUnsubscribePost(Boolean post) { this.listUnsubscribePost = post; return this; }
+    public SendEmailRequest sendAt(String sendAt) { this.sendAt = sendAt; return this; }
+
+    public String getFrom() { return from; }
+    public List<String> getTo() { return to; }
+    public String getSubject() { return subject; }
+    public String getHtml() { return html; }
+    public String getText() { return text; }
+    public List<Attachment> getAttachments() { return attachments; }
+    public Map<String, String> getHeaders() { return headers; }
+    public String getListUnsubscribeUrl() { return listUnsubscribeUrl; }
+    public Boolean getListUnsubscribePost() { return listUnsubscribePost; }
+    public String getSendAt() { return sendAt; }
+}
