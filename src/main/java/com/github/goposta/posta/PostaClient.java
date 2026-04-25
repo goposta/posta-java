@@ -124,6 +124,43 @@ public class PostaClient {
         return post("/emails/" + emailId + "/retry", null, SendResponse.class);
     }
 
+    /**
+     * Adds an email to a named subscriber list. The list is created on first
+     * use. Any prior list-scoped opt-out for this (list, email) is cleared.
+     * Idempotent.
+     */
+    public ListSubscribeResponse subscribeToList(ListSubscribeRequest req) throws PostaException, IOException {
+        return post("/subscriber-lists/subscribe", req, ListSubscribeResponse.class);
+    }
+
+    /**
+     * Opts an email out of a specific subscriber list. Idempotent; does not
+     * change the subscriber's global status.
+     *
+     * @param listId list ID
+     * @param email  recipient email address
+     * @param reason optional audit reason (may be null)
+     */
+    public ListSubscribeResponse unsubscribeFromList(long listId, String email, String reason) throws PostaException, IOException {
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("email", email);
+        if (reason != null && !reason.isEmpty()) {
+            body.put("reason", reason);
+        }
+        return post("/subscriber-lists/" + listId + "/unsubscribe", body, ListSubscribeResponse.class);
+    }
+
+    /**
+     * Reverses a list-scoped opt-out and (for static lists) re-adds the
+     * subscriber. Idempotent.
+     */
+    public ListSubscribeResponse resubscribeToList(long listId, String email) throws PostaException, IOException {
+        return post("/subscriber-lists/" + listId + "/resubscribe",
+                java.util.Collections.singletonMap("email", email),
+                ListSubscribeResponse.class);
+    }
+
+
     private <T> T post(String path, Object body, Class<T> responseType) throws PostaException, IOException {
         try {
             HttpRequest.BodyPublisher publisher = body != null
