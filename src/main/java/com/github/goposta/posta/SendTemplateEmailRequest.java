@@ -28,6 +28,9 @@ public class SendTemplateEmailRequest {
 
     private List<Attachment> attachments;
 
+    /** Configures the {@code List-Unsubscribe} / {@code List-Unsubscribe-Post} headers. */
+    private Unsubscribe unsubscribe;
+
     public SendTemplateEmailRequest templateId(Integer templateId) { this.templateId = templateId; return this; }
     public SendTemplateEmailRequest template(String template) { this.template = template; return this; }
     public SendTemplateEmailRequest language(String language) { this.language = language; return this; }
@@ -35,6 +38,7 @@ public class SendTemplateEmailRequest {
     public SendTemplateEmailRequest to(List<String> to) { this.to = to; return this; }
     public SendTemplateEmailRequest templateData(Map<String, Object> data) { this.templateData = data; return this; }
     public SendTemplateEmailRequest attachments(List<Attachment> attachments) { this.attachments = attachments; return this; }
+    public SendTemplateEmailRequest unsubscribe(Unsubscribe unsubscribe) { this.unsubscribe = unsubscribe; return this; }
 
     public Integer getTemplateId() { return templateId; }
     public String getTemplate() { return template; }
@@ -43,4 +47,5 @@ public class SendTemplateEmailRequest {
     public List<String> getTo() { return to; }
     public Map<String, Object> getTemplateData() { return templateData; }
     public List<Attachment> getAttachments() { return attachments; }
+    public Unsubscribe getUnsubscribe() { return unsubscribe; }
 }

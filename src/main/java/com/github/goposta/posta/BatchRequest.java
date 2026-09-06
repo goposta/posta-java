@@ -22,15 +22,23 @@ public class BatchRequest {
     private String from;
     private List<BatchRecipient> recipients;
 
+    /**
+     * Configures the {@code List-Unsubscribe} headers for every recipient in
+     * the batch (per-recipient unsubscribe is intentionally not supported).
+     */
+    private Unsubscribe unsubscribe;
+
     public BatchRequest templateId(Integer templateId) { this.templateId = templateId; return this; }
     public BatchRequest template(String template) { this.template = template; return this; }
     public BatchRequest language(String language) { this.language = language; return this; }
     public BatchRequest from(String from) { this.from = from; return this; }
     public BatchRequest recipients(List<BatchRecipient> recipients) { this.recipients = recipients; return this; }
+    public BatchRequest unsubscribe(Unsubscribe unsubscribe) { this.unsubscribe = unsubscribe; return this; }
 
     public Integer getTemplateId() { return templateId; }
     public String getTemplate() { return template; }
     public String getLanguage() { return language; }
     public String getFrom() { return from; }
     public List<BatchRecipient> getRecipients() { return recipients; }
+    public Unsubscribe getUnsubscribe() { return unsubscribe; }
 }
