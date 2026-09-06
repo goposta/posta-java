@@ -245,11 +245,68 @@ public class PostaClient {
         return emails.retry(emailId);
     }
 
+<<<<<<< HEAD
     /** @deprecated Use {@code client.emails.list}, which can also filter and sort. */
     @Deprecated
     public PageableResponse<Email> listEmails(int page, int size)
             throws PostaException, IOException {
         return emails.list(page, size);
+=======
+    /**
+     * Adds an email to a named subscriber list. The list is created on first
+     * use. Any prior list-scoped opt-out for this (list, email) is cleared.
+     * Idempotent.
+     */
+    public ListSubscribeResponse subscribeToList(ListSubscribeRequest req) throws PostaException, IOException {
+        return post("/subscriber-lists/subscribe", req, ListSubscribeResponse.class);
+    }
+
+    /**
+     * Opts an email out of a specific subscriber list. Idempotent; does not
+     * change the subscriber's global status.
+     *
+     * @param listId list ID
+     * @param email  recipient email address
+     * @param reason optional audit reason (may be null)
+     */
+    public ListSubscribeResponse unsubscribeFromList(long listId, String email, String reason) throws PostaException, IOException {
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("email", email);
+        if (reason != null && !reason.isEmpty()) {
+            body.put("reason", reason);
+        }
+        return post("/subscriber-lists/" + listId + "/unsubscribe", body, ListSubscribeResponse.class);
+    }
+
+    /**
+     * Reverses a list-scoped opt-out and (for static lists) re-adds the
+     * subscriber. Idempotent.
+     */
+    public ListSubscribeResponse resubscribeToList(long listId, String email) throws PostaException, IOException {
+        return post("/subscriber-lists/" + listId + "/resubscribe",
+                java.util.Collections.singletonMap("email", email),
+                ListSubscribeResponse.class);
+    }
+
+
+    private <T> T post(String path, Object body, Class<T> responseType) throws PostaException, IOException {
+        try {
+            HttpRequest.BodyPublisher publisher = body != null
+                    ? HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body))
+                    : HttpRequest.BodyPublishers.noBody();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + path))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(publisher)
+                    .build();
+            return execute(request, responseType);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Request interrupted", e);
+        }
+>>>>>>> cc478a6dd363f67ac46afd8ed3a48ffbcc63f754
     }
 
     /** @deprecated Use {@code client.emails.get}. */

@@ -38,6 +38,14 @@ public class SendEmailRequest {
     @JsonProperty("send_at")
     private String sendAt;
 
+    /**
+     * Optional: auto-add the recipient to a named subscriber list (created on
+     * first use). Per-list opt-outs are honored; a suppressed recipient causes
+     * the send to be skipped (see {@link SendResponse#getSkipped()}). Only
+     * applied when {@code to} has a single address.
+     */
+    private String list;
+
     public SendEmailRequest from(String from) { this.from = from; return this; }
     public SendEmailRequest to(List<String> to) { this.to = to; return this; }
     public SendEmailRequest subject(String subject) { this.subject = subject; return this; }
@@ -53,6 +61,7 @@ public class SendEmailRequest {
     @Deprecated
     public SendEmailRequest listUnsubscribePost(Boolean post) { this.listUnsubscribePost = post; return this; }
     public SendEmailRequest sendAt(String sendAt) { this.sendAt = sendAt; return this; }
+    public SendEmailRequest list(String list) { this.list = list; return this; }
 
     public String getFrom() { return from; }
     public List<String> getTo() { return to; }
@@ -65,4 +74,5 @@ public class SendEmailRequest {
     public String getListUnsubscribeUrl() { return listUnsubscribeUrl; }
     public Boolean getListUnsubscribePost() { return listUnsubscribePost; }
     public String getSendAt() { return sendAt; }
+    public String getList() { return list; }
 }
