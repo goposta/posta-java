@@ -1,129 +1,257 @@
 package com.github.goposta.posta;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 /**
- * Posta Java client for the public email API.
+ * Client for the Posta email platform.
  *
- * <p>Supports sending emails, template emails, batch emails,
- * and checking email delivery status.</p>
+ * <p>Its public fields group the API by resource. Every method returns the
+ * decoded {@code data} from the API envelope and throws {@link PostaException}
+ * on a non-2xx response.</p>
+ *
+ * <h2>Credentials</h2>
+ *
+ * <p>Most machine-facing endpoints take an API key. Account-level endpoints
+ * ({@code /users/me/*}) and the platform admin surface accept only a user
+ * session token, which {@link #withToken} supplies.</p>
+ *
+ * <h2>Workspaces</h2>
+ *
+ * <p>Workspace-scoped endpoints resolve the active workspace from the
+ * {@code X-Posta-Workspace-Id} header. A workspace-bound API key carries its
+ * workspace already; an account-wide key or a user session must name one.</p>
  *
  * <pre>{@code
- * PostaClient client = new PostaClient("https://posta.example.com", "your-api-key");
- * SendResponse response = client.sendEmail(new SendEmailRequest()
- *     .from("sender@example.com")
- *     .to(List.of("recipient@example.com"))
- *     .subject("Hello")
- *     .html("<h1>Hello World</h1>"));
+ * PostaClient posta = new PostaClient("https://posta.example.com", "psk_your_api_key");
+ *
+ * SendResponse resp = posta.emails.send(new SendEmailRequest()
+ *     .from("Acme <hello@example.com>")
+ *     .to(List.of("user@example.com"))
+ *     .subject("Hello from Posta")
+ *     .html("<h1>Hello!</h1>"));
  * }</pre>
  */
 public class PostaClient {
 
-    private final String baseUrl;
-    private final String apiKey;
-    private final HttpClient httpClient;
-    private final ObjectMapper objectMapper;
+    private final Http http;
+
+    /** Sends mail and reads the resulting delivery records. */
+    public final Emails emails;
+    /** Reads recorded bounces and complaints. */
+    public final Bounces bounces;
+    /** Manages the workspace suppression list. */
+    public final Suppressions suppressions;
+    /** Registers webhook endpoints and reads delivery attempts. */
+    public final Webhooks webhooks;
+    /** Manages templates, versions, and localizations. */
+    public final Templates templates;
+    /** Manages the workspace's template languages. */
+    public final Languages languages;
+    /** Manages reusable CSS for templates. */
+    public final Stylesheets stylesheets;
+    /** Manages sending domains and their DNS verification. */
+    public final Domains domains;
+    /** Manages the SMTP servers Posta delivers through. */
+    public final SmtpServers smtpServers;
+    /** Manages credentials for the SMTP relay listener. */
+    public final SmtpCredentials smtpCredentials;
+    /** Manages subscriber records and bulk imports. */
+    public final Subscribers subscribers;
+    /** Manages lists, their members, and opt-outs. */
+    public final SubscriberLists subscriberLists;
+    /** Manages the lists behind List-Unsubscribe headers. */
+    public final UnsubscribeLists unsubscribeLists;
+    /** Reads the derived contact view of everyone mailed. */
+    public final Contacts contacts;
+    /** Manages bulk campaigns and their lifecycle. */
+    public final Campaigns campaigns;
+    /** Reads delivery and engagement analytics. */
+    public final Analytics analytics;
+    /** Manages web form endpoints and their embed snippets. */
+    public final Forms forms;
+    /** Reads and triages web form submissions. */
+    public final Messages messages;
+    /** Manages the spam filters applied to submissions. */
+    public final MessageFilters messageFilters;
+    /** Reads inbound email received by Posta. */
+    public final Inbound inbound;
+    /** Manages the workspace's API keys. */
+    public final ApiKeys apiKeys;
+    /** Manages workspaces, members, invitations, and settings. */
+    public final Workspaces workspaces;
+    /** Manages the signed-in account (session credential only). */
+    public final Users users;
+    /** Login, registration, and password recovery. */
+    public final Auth auth;
+    /** Platform administration (admin session only). */
+    public final Admin admin;
+    /** Build and health information. */
+    public final SystemInfo system;
 
     /**
-     * Creates a new Posta client.
+     * Creates a client authenticated with an API key.
      *
-     * @param baseUrl Base URL of the Posta instance (e.g. https://posta.example.com)
-     * @param apiKey  API key for authentication
+     * @param baseUrl base URL of the Posta instance, e.g. https://posta.example.com
+     * @param apiKey  an API key ({@code psk_…}), or a session token via {@link #withToken}
      */
     public PostaClient(String baseUrl, String apiKey) {
-        this(baseUrl, apiKey, Duration.ofSeconds(30));
+        this(baseUrl, apiKey, Duration.ofSeconds(30), null, null, null);
     }
 
     /**
-     * Creates a new Posta client with a custom timeout.
+     * Creates a client with a custom timeout.
      *
-     * @param baseUrl Base URL of the Posta instance
-     * @param apiKey  API key for authentication
      * @param timeout HTTP request timeout
      */
     public PostaClient(String baseUrl, String apiKey, Duration timeout) {
-        this.baseUrl = baseUrl.replaceAll("/+$", "") + "/api/v1";
-        this.apiKey = apiKey;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(timeout)
-                .build();
-        this.objectMapper = new ObjectMapper()
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        this(baseUrl, apiKey, timeout, null, null, null);
     }
 
     /**
-     * Sends a single email.
+     * Creates a client bound to a workspace.
      *
-     * @param request the send email request
-     * @return the send response containing email ID and status
-     * @throws PostaException if the API returns an error
-     * @throws IOException    if an I/O error occurs
+     * @param workspaceId active workspace for workspace-scoped endpoints
      */
+    public PostaClient(String baseUrl, String apiKey, Duration timeout, Long workspaceId) {
+        this(baseUrl, apiKey, timeout, workspaceId, null, null);
+    }
+
+    /**
+     * Creates a fully configured client.
+     *
+     * @param headers   extra headers sent with every request
+     * @param userAgent overrides the User-Agent header
+     */
+    public PostaClient(String baseUrl, String apiKey, Duration timeout, Long workspaceId,
+                       Map<String, String> headers, String userAgent) {
+        this.http = new Http(baseUrl, apiKey,
+                timeout == null ? Duration.ofSeconds(30) : timeout,
+                workspaceId, headers, userAgent);
+
+        this.emails = new Emails(http);
+        this.bounces = new Bounces(http);
+        this.suppressions = new Suppressions(http);
+        this.webhooks = new Webhooks(http);
+        this.templates = new Templates(http);
+        this.languages = new Languages(http);
+        this.stylesheets = new Stylesheets(http);
+        this.domains = new Domains(http);
+        this.smtpServers = new SmtpServers(http);
+        this.smtpCredentials = new SmtpCredentials(http);
+        this.subscribers = new Subscribers(http);
+        this.subscriberLists = new SubscriberLists(http);
+        this.unsubscribeLists = new UnsubscribeLists(http);
+        this.contacts = new Contacts(http);
+        this.campaigns = new Campaigns(http);
+        this.analytics = new Analytics(http);
+        this.forms = new Forms(http);
+        this.messages = new Messages(http);
+        this.messageFilters = new MessageFilters(http);
+        this.inbound = new Inbound(http);
+        this.apiKeys = new ApiKeys(http);
+        this.workspaces = new Workspaces(http);
+        this.users = new Users(http);
+        this.auth = new Auth(http);
+        this.admin = new Admin(http);
+        this.system = new SystemInfo(http);
+    }
+
+    /**
+     * Creates a client authenticated with a user session token (JWT), as
+     * returned by {@link Auth#login}. Account-level endpoints under
+     * {@code /users/me} and the platform admin surface accept only this
+     * credential.
+     */
+    public static PostaClient withToken(String baseUrl, String token) {
+        return new PostaClient(baseUrl, token);
+    }
+
+    /** Creates a session-authenticated client bound to a workspace. */
+    public static PostaClient withToken(String baseUrl, String token, Long workspaceId) {
+        return new PostaClient(baseUrl, token, Duration.ofSeconds(30), workspaceId);
+    }
+
+    // ── Compatibility ────────────────────────────────────────────────────
+    //
+    // Kept for source compatibility with earlier releases, which exposed the
+    // send surface directly on the client. New code should use the resource
+    // fields, which cover the whole API rather than this subset.
+
+    /** @deprecated Use {@code client.emails.send}. */
+    @Deprecated
     public SendResponse sendEmail(SendEmailRequest request) throws PostaException, IOException {
-        return post("/emails/send", request, SendResponse.class);
+        return emails.send(request);
     }
 
-    /**
-     * Sends an email using a template.
-     *
-     * @param request the send template email request
-     * @return the send response containing email ID and status
-     * @throws PostaException if the API returns an error
-     * @throws IOException    if an I/O error occurs
-     */
-    public SendResponse sendTemplateEmail(SendTemplateEmailRequest request) throws PostaException, IOException {
-        return post("/emails/send-template", request, SendResponse.class);
+    /** @deprecated Use {@code client.emails.sendDryRun}. */
+    @Deprecated
+    public JsonNode sendEmailDryRun(SendEmailRequest request) throws PostaException, IOException {
+        return emails.sendDryRun(request);
     }
 
-    /**
-     * Sends batch emails using a template.
-     *
-     * @param request the batch request
-     * @return the batch response with per-recipient results
-     * @throws PostaException if the API returns an error
-     * @throws IOException    if an I/O error occurs
-     */
+    /** @deprecated Use {@code client.emails.sendTemplate}. */
+    @Deprecated
+    public SendResponse sendTemplateEmail(SendTemplateEmailRequest request)
+            throws PostaException, IOException {
+        return emails.sendTemplate(request);
+    }
+
+    /** @deprecated Use {@code client.emails.sendTemplateDryRun}. */
+    @Deprecated
+    public JsonNode sendTemplateEmailDryRun(SendTemplateEmailRequest request)
+            throws PostaException, IOException {
+        return emails.sendTemplateDryRun(request);
+    }
+
+    /** @deprecated Use {@code client.emails.sendBatch}. */
+    @Deprecated
     public BatchResponse sendBatch(BatchRequest request) throws PostaException, IOException {
-        return post("/emails/batch", request, BatchResponse.class);
+        return emails.sendBatch(request);
     }
 
-    /**
-     * Gets the delivery status of an email.
-     *
-     * @param emailId the email UUID
-     * @return the email status response
-     * @throws PostaException if the API returns an error
-     * @throws IOException    if an I/O error occurs
-     */
+    /** @deprecated Use {@code client.emails.sendBatchDryRun}. */
+    @Deprecated
+    public JsonNode sendBatchDryRun(BatchRequest request) throws PostaException, IOException {
+        return emails.sendBatchDryRun(request);
+    }
+
+    /** @deprecated Use {@code client.emails.preview}. */
+    @Deprecated
+    public PreviewResponse previewTemplate(PreviewRequest request)
+            throws PostaException, IOException {
+        return emails.preview(request);
+    }
+
+    /** @deprecated Use {@code client.emails.verify}. */
+    @Deprecated
+    public VerificationResult verifyEmail(VerifyEmailRequest request)
+            throws PostaException, IOException {
+        return emails.verify(request.getEmail());
+    }
+
+    /** @deprecated Use {@code client.emails.status}. */
+    @Deprecated
     public EmailStatusResponse getEmailStatus(String emailId) throws PostaException, IOException {
-        return get("/emails/" + emailId + "/status", EmailStatusResponse.class);
+        return emails.status(emailId);
     }
 
-    /**
-     * Retries a failed email delivery.
-     *
-     * <p>Only emails with status "failed" can be retried, subject to the retry limit
-     * configured on the SMTP server.</p>
-     *
-     * @param emailId the email UUID
-     * @return the send response containing email ID and new status
-     * @throws PostaException if the API returns an error (e.g. retry limit reached)
-     * @throws IOException    if an I/O error occurs
-     */
+    /** @deprecated Use {@code client.emails.retry}. */
+    @Deprecated
     public SendResponse retryEmail(String emailId) throws PostaException, IOException {
-        return post("/emails/" + emailId + "/retry", null, SendResponse.class);
+        return emails.retry(emailId);
     }
 
+<<<<<<< HEAD
+    /** @deprecated Use {@code client.emails.list}, which can also filter and sort. */
+    @Deprecated
+    public PageableResponse<Email> listEmails(int page, int size)
+            throws PostaException, IOException {
+        return emails.list(page, size);
+=======
     /**
      * Adds an email to a named subscriber list. The list is created on first
      * use. Any prior list-scoped opt-out for this (list, email) is cleared.
@@ -178,46 +306,66 @@ public class PostaClient {
             Thread.currentThread().interrupt();
             throw new IOException("Request interrupted", e);
         }
+>>>>>>> cc478a6dd363f67ac46afd8ed3a48ffbcc63f754
     }
 
-    private <T> T get(String path, Class<T> responseType) throws PostaException, IOException {
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + path))
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
-            return execute(request, responseType);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Request interrupted", e);
-        }
+    /** @deprecated Use {@code client.emails.get}. */
+    @Deprecated
+    public Email getEmail(String id) throws PostaException, IOException {
+        return emails.get(id);
     }
 
-    private <T> T execute(HttpRequest request, Class<T> responseType)
-            throws IOException, InterruptedException, PostaException {
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        int statusCode = response.statusCode();
+    /** @deprecated Use {@code client.bounces.list}. */
+    @Deprecated
+    public PageableResponse<Bounce> listBounces(int page, int size)
+            throws PostaException, IOException {
+        return bounces.list(page, size);
+    }
 
-        if (statusCode < 200 || statusCode >= 300) {
-            String message = "Unexpected status " + statusCode;
-            try {
-                var errorResp = objectMapper.readTree(response.body());
-                var error = errorResp.get("error");
-                if (error != null && error.has("message")) {
-                    message = error.get("message").asText();
-                }
-            } catch (Exception ignored) {
-            }
-            throw new PostaException(statusCode, message);
-        }
+    /** @deprecated Use {@code client.webhooks.list}. */
+    @Deprecated
+    public PageableResponse<Webhook> listWebhooks(int page, int size)
+            throws PostaException, IOException {
+        return webhooks.list(page, size);
+    }
 
-        var tree = objectMapper.readTree(response.body());
-        var dataNode = tree.get("data");
-        if (dataNode == null) {
-            throw new PostaException(statusCode, "Invalid response: missing data field");
-        }
-        return objectMapper.treeToValue(dataNode, responseType);
+    /** @deprecated Use {@code client.webhooks.create}. */
+    @Deprecated
+    public Webhook createWebhook(CreateWebhookRequest request) throws PostaException, IOException {
+        return webhooks.create(request);
+    }
+
+    /** @deprecated Use {@code client.webhooks.delete}. */
+    @Deprecated
+    public void deleteWebhook(long id) throws PostaException, IOException {
+        webhooks.delete(id);
+    }
+
+    /** @deprecated Use {@code client.webhooks.listDeliveries}. */
+    @Deprecated
+    public PageableResponse<WebhookDelivery> listWebhookDeliveries(int page, int size)
+            throws PostaException, IOException {
+        return webhooks.listDeliveries(page, size);
+    }
+
+    /** @deprecated Use {@code client.subscriberLists.subscribe}. */
+    @Deprecated
+    public ListSubscribeResponse subscribeToList(ListSubscribeRequest request)
+            throws PostaException, IOException {
+        return subscriberLists.subscribe(request);
+    }
+
+    /** @deprecated Use {@code client.subscriberLists.unsubscribe}. */
+    @Deprecated
+    public ListSubscribeResponse unsubscribeFromList(long listId, ListUnsubscribeRequest request)
+            throws PostaException, IOException {
+        return subscriberLists.unsubscribe(listId, request);
+    }
+
+    /** @deprecated Use {@code client.subscriberLists.resubscribe}. */
+    @Deprecated
+    public ListSubscribeResponse resubscribeToList(long listId, String email)
+            throws PostaException, IOException {
+        return subscriberLists.resubscribe(listId, email);
     }
 }

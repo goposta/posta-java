@@ -6,11 +6,15 @@
 
     <groupId>com.github.goposta</groupId>
     <artifactId>posta-java</artifactId>
+<<<<<<< HEAD
+    <version>2.0.0</version>
+=======
     <version>1.1.0</version>
+>>>>>>> cc478a6dd363f67ac46afd8ed3a48ffbcc63f754
     <packaging>jar</packaging>
 
     <name>Posta Java Client</name>
-    <description>Java client for the Posta email API</description>
+    <description>Java client for the Posta email platform</description>
     <url>https://github.com/goposta/posta-java</url>
 
     <scm>
